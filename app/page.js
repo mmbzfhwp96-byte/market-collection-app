@@ -124,7 +124,7 @@ export default function Home() {
         return;
       }
 
-      const cameraId = cameras[0].id;
+      //const cameraId = cameras[0].id;
 
       await scanner.start(
         cameraId,
