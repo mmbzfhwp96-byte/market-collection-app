@@ -50,6 +50,13 @@ export default function Home() {
   const [temporaryAmount, setTemporaryAmount] = useState(null);
   const [customAmount, setCustomAmount] = useState("");
 
+  const [showReport, setShowReport] = useState(false);
+  const [reportFromDate, setReportFromDate] = useState(getTodayString());
+  const [reportToDate, setReportToDate] = useState(getTodayString());
+  const [reportCollections, setReportCollections] = useState([]);
+  const [reportExpenses, setReportExpenses] = useState([]);
+  const [reportLoaded, setReportLoaded] = useState(false);
+
   const [showExpense, setShowExpense] = useState(false);
   const [expenseType, setExpenseType] = useState("");
   const [expenseAmount, setExpenseAmount] = useState(null);
@@ -225,6 +232,15 @@ export default function Home() {
     setExpenseAmount(null);
     setCustomExpenseAmount("");
     setExpenseNote("");
+    stopScanner();
+  }
+
+  function openReportMode() {
+    setShowReport(true);
+    setShowTemporary(false);
+    setShowExpense(false);
+    setSelectedStall(null);
+    setMessage("");
     stopScanner();
   }
 
@@ -422,7 +438,54 @@ async function deleteExpense(id) {
   setExpenses(expenses.filter((item) => item.id !== id));
   setMessage("ลบรายจ่ายแล้ว");
 }
+async function loadReportData() {
+  if (!reportFromDate || !reportToDate) {
+    setMessage("กรุณาเลือกวันที่เริ่มต้นและวันที่สิ้นสุด");
+    return;
+  }
 
+  if (reportFromDate > reportToDate) {
+    setMessage("วันที่เริ่มต้นต้องไม่มากกว่าวันที่สิ้นสุด");
+    return;
+  }
+
+  setLoading(true);
+  setMessage("");
+
+  const { data: collectionData, error: collectionError } = await supabase
+    .from("collections")
+    .select("*")
+    .gte("collection_date", reportFromDate)
+    .lte("collection_date", reportToDate)
+    .order("collection_date", { ascending: true });
+
+  if (collectionError) {
+    console.error("Load report collections error:", collectionError);
+    setLoading(false);
+    setMessage("โหลดรายงานรับเงินไม่สำเร็จ");
+    return;
+  }
+
+  const { data: expenseData, error: expenseError } = await supabase
+    .from("expenses")
+    .select("*")
+    .gte("expense_date", reportFromDate)
+    .lte("expense_date", reportToDate)
+    .order("expense_date", { ascending: true });
+
+  setLoading(false);
+
+  if (expenseError) {
+    console.error("Load report expenses error:", expenseError);
+    setMessage("โหลดรายงานรายจ่ายไม่สำเร็จ");
+    return;
+  }
+
+  setReportCollections(collectionData || []);
+  setReportExpenses(expenseData || []);
+  setReportLoaded(true);
+  setMessage(`โหลดรายงาน ${reportFromDate} ถึง ${reportToDate} แล้ว`);
+}
   function getPaymentText(paymentMethod) {
     if (paymentMethod === "cash") return "เงินสด";
     if (paymentMethod === "transfer") return "เงินโอน";
@@ -470,7 +533,34 @@ async function deleteExpense(id) {
   const regularCount = collections.filter(
     (item) => item.record_type === "regular"
   ).length;
+  const reportCashTotal = reportCollections
+  .filter((item) => item.payment_method === "cash")
+  .reduce((sum, item) => sum + Number(item.amount_paid), 0);
 
+const reportTransferTotal = reportCollections
+  .filter((item) => item.payment_method === "transfer")
+  .reduce((sum, item) => sum + Number(item.amount_paid), 0);
+
+const reportUnpaidTotal = reportCollections
+  .filter((item) => item.payment_method === "unpaid")
+  .reduce((sum, item) => sum + Number(item.amount_due), 0);
+
+const reportIncomeTotal = reportCashTotal + reportTransferTotal;
+
+const reportExpenseTotal = reportExpenses.reduce(
+  (sum, item) => sum + Number(item.amount),
+  0
+);
+
+const reportNetTotal = reportIncomeTotal - reportExpenseTotal;
+
+const reportRegularCount = reportCollections.filter(
+  (item) => item.record_type === "regular"
+).length;
+
+const reportTemporaryCount = reportCollections.filter(
+  (item) => item.record_type === "temporary"
+).length;
   useEffect(() => {
     loadStalls();
     loadTodayData();
@@ -492,7 +582,7 @@ async function deleteExpense(id) {
           </p>
         </div>
 
-        <div className="mb-4 grid grid-cols-3 gap-3">
+        <div className="mb-4 grid grid-cols-2 gap-3">
           <button
             onClick={startScanner}
             disabled={loading}
@@ -515,6 +605,14 @@ async function deleteExpense(id) {
             className="rounded-2xl bg-orange-500 p-4 text-lg font-bold text-white shadow disabled:bg-slate-400"
           >
             รายจ่าย
+          </button>
+
+          <button
+            onClick={openReportMode}
+            disabled={loading}
+            className="rounded-2xl bg-slate-800 p-4 text-lg font-bold text-white shadow disabled:bg-slate-400"
+          >
+            รายงาน
           </button>
         </div>
 
@@ -791,7 +889,110 @@ async function deleteExpense(id) {
             </button>
           </div>
         )}
+        {showReport && (
+  <div className="mb-4 rounded-2xl bg-white p-5 shadow">
+    <h2 className="mb-4 text-center text-2xl font-bold text-slate-800">
+      รายงานตามช่วงวันที่
+    </h2>
 
+    <div className="mb-4 grid grid-cols-2 gap-3">
+      <div>
+        <label className="mb-1 block text-sm font-bold text-slate-600">
+          วันที่เริ่มต้น
+        </label>
+        <input
+          type="date"
+          value={reportFromDate}
+          onChange={(event) => setReportFromDate(event.target.value)}
+          className="w-full rounded-xl border border-slate-300 p-3 text-lg"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-bold text-slate-600">
+          วันที่สิ้นสุด
+        </label>
+        <input
+          type="date"
+          value={reportToDate}
+          onChange={(event) => setReportToDate(event.target.value)}
+          className="w-full rounded-xl border border-slate-300 p-3 text-lg"
+        />
+      </div>
+    </div>
+
+    <button
+      onClick={loadReportData}
+      disabled={loading}
+      className="mb-4 w-full rounded-2xl bg-slate-800 p-5 text-2xl font-bold text-white disabled:bg-slate-400"
+    >
+      ดูรายงาน
+    </button>
+
+    {reportLoaded && (
+      <div className="rounded-2xl bg-slate-100 p-4">
+        <p className="mb-4 text-center text-lg font-bold text-slate-700">
+          {reportFromDate} ถึง {reportToDate}
+        </p>
+
+        <div className="grid gap-2 text-lg">
+          <div className="flex justify-between">
+            <span>เงินสดรวม</span>
+            <span className="font-bold">{reportCashTotal} บาท</span>
+          </div>
+
+          <div className="flex justify-between">
+            <span>เงินโอนรวม</span>
+            <span className="font-bold">{reportTransferTotal} บาท</span>
+          </div>
+
+          <div className="flex justify-between text-red-600">
+            <span>ยอดค้างจ่าย</span>
+            <span className="font-bold">{reportUnpaidTotal} บาท</span>
+          </div>
+
+          <div className="mt-2 flex justify-between border-t pt-2 text-xl">
+            <span className="font-bold">รายรับรวม</span>
+            <span className="font-bold">{reportIncomeTotal} บาท</span>
+          </div>
+
+          <div className="flex justify-between text-orange-600">
+            <span className="font-bold">รายจ่ายรวม</span>
+            <span className="font-bold">{reportExpenseTotal} บาท</span>
+          </div>
+
+          <div
+            className={`mt-2 flex justify-between rounded-xl p-3 text-xl ${
+              reportNetTotal >= 0
+                ? "bg-green-100 text-green-800"
+                : "bg-red-100 text-red-800"
+            }`}
+          >
+            <span className="font-bold">คงเหลือสุทธิ</span>
+            <span className="font-bold">{reportNetTotal} บาท</span>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-sm text-slate-500">แผงประจำ</p>
+            <p className="text-2xl font-bold">{reportRegularCount}</p>
+          </div>
+
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-sm text-slate-500">แผงอื่น ๆ</p>
+            <p className="text-2xl font-bold">{reportTemporaryCount}</p>
+          </div>
+
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-sm text-slate-500">รายจ่าย</p>
+            <p className="text-2xl font-bold">{reportExpenses.length}</p>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
         <div className="mb-4 rounded-2xl bg-white p-5 shadow">
           <h2 className="mb-3 text-xl font-bold text-slate-800">
             สรุปวันนี้
