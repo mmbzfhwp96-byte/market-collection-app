@@ -530,7 +530,7 @@ async function deleteExpense(id) {
 
           <div
             id="qr-reader"
-            className="min-h-[320px] w-full overflow-hidden rounded-xl bg-slate-200"
+            className="min-h-[240px] w-full overflow-hidden rounded-xl bg-slate-200"
           ></div>
 
         {!scannerRunning && (
