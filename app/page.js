@@ -371,6 +371,58 @@ export default function Home() {
     setExpenseNote("");
   }
 
+  async function deleteCollection(id) {
+  const confirmDelete = window.confirm("ต้องการลบรายการรับเงินนี้ใช่ไหม?");
+
+  if (!confirmDelete) {
+    return;
+  }
+
+  setLoading(true);
+
+  const { error } = await supabase
+    .from("collections")
+    .delete()
+    .eq("id", id);
+
+  setLoading(false);
+
+  if (error) {
+    console.error("Delete collection error:", error);
+    setMessage("ลบรายการรับเงินไม่สำเร็จ");
+    return;
+  }
+
+  setCollections(collections.filter((item) => item.id !== id));
+  setMessage("ลบรายการรับเงินแล้ว");
+}
+
+async function deleteExpense(id) {
+  const confirmDelete = window.confirm("ต้องการลบรายจ่ายนี้ใช่ไหม?");
+
+  if (!confirmDelete) {
+    return;
+  }
+
+  setLoading(true);
+
+  const { error } = await supabase
+    .from("expenses")
+    .delete()
+    .eq("id", id);
+
+  setLoading(false);
+
+  if (error) {
+    console.error("Delete expense error:", error);
+    setMessage("ลบรายจ่ายไม่สำเร็จ");
+    return;
+  }
+
+  setExpenses(expenses.filter((item) => item.id !== id));
+  setMessage("ลบรายจ่ายแล้ว");
+}
+
   function getPaymentText(paymentMethod) {
     if (paymentMethod === "cash") return "เงินสด";
     if (paymentMethod === "transfer") return "เงินโอน";
@@ -476,10 +528,18 @@ export default function Home() {
             </button>
           )}
 
-          <div
-            id="qr-reader"
-            className="min-h-[320px] w-full overflow-hidden rounded-xl bg-slate-200"
-          ></div>
+          {scannerRunning && (
+            <div
+              id="qr-reader"
+              className="min-h-[320px] w-full overflow-hidden rounded-xl bg-slate-200"
+            ></div>
+          )}
+
+          {!scannerRunning && (
+            <div className="rounded-xl bg-slate-100 p-4 text-center text-slate-400">
+              กดปุ่มสแกนแผงเพื่อเปิดกล้อง
+            </div>
+          )}
 
           {lastScan && (
             <p className="mt-3 text-center text-sm text-slate-500">
@@ -831,6 +891,13 @@ export default function Home() {
                       ค้างจ่าย {Number(item.amount_due)} บาท
                     </p>
                   )}
+                  <button
+                    onClick={() => deleteCollection(item.id)}
+                    disabled={loading}
+                    className="mt-3 w-full rounded-xl bg-red-100 p-3 text-lg font-bold text-red-700 disabled:bg-slate-200"
+                  >
+                    ลบรายการนี้
+                  </button>   
                 </div>
               ))}
             </div>
@@ -865,6 +932,13 @@ export default function Home() {
                     <span>{item.note || "-"}</span>
                     <span>{getRecordTime(item)}</span>
                   </div>
+                  <button
+                    onClick={() => deleteExpense(item.id)}
+                    disabled={loading}
+                    className="mt-3 w-full rounded-xl bg-red-100 p-3 text-lg font-bold text-red-700 disabled:bg-slate-200"
+                  >
+                    ลบรายจ่ายนี้
+                  </button>
                 </div>
               ))}
             </div>
