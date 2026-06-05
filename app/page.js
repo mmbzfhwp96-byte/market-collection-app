@@ -528,18 +528,16 @@ async function deleteExpense(id) {
             </button>
           )}
 
-          {scannerRunning && (
-            <div
-              id="qr-reader"
-              className="min-h-[320px] w-full overflow-hidden rounded-xl bg-slate-200"
-            ></div>
-          )}
+          <div
+            id="qr-reader"
+            className="min-h-[320px] w-full overflow-hidden rounded-xl bg-slate-200"
+          ></div>
 
-          {!scannerRunning && (
-            <div className="rounded-xl bg-slate-100 p-4 text-center text-slate-400">
-              กดปุ่มสแกนแผงเพื่อเปิดกล้อง
-            </div>
-          )}
+        {!scannerRunning && (
+          <div className="mt-3 rounded-xl bg-slate-100 p-4 text-center text-slate-400">
+            กดปุ่มสแกนแผงเพื่อเปิดกล้อง
+          </div>
+        )}
 
           {lastScan && (
             <p className="mt-3 text-center text-sm text-slate-500">
