@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/supabase.js";
 
 const temporaryCategories = [
   "ขายผัก",
@@ -64,7 +64,7 @@ export default function Home() {
       .order("stall_code", { ascending: true });
 
     if (error) {
-      console.error(error);
+      console.error("Load stalls error:", error);
       setMessage("โหลดข้อมูลแผงไม่สำเร็จ");
       return;
     }
@@ -82,7 +82,7 @@ export default function Home() {
       .order("created_at", { ascending: false });
 
     if (collectionError) {
-      console.error(collectionError);
+      console.error("Load collections error:", collectionError);
       setMessage("โหลดรายการรับเงินไม่สำเร็จ");
       return;
     }
@@ -94,7 +94,7 @@ export default function Home() {
       .order("created_at", { ascending: false });
 
     if (expenseError) {
-      console.error(expenseError);
+      console.error("Load expenses error:", expenseError);
       setMessage("โหลดรายจ่ายไม่สำเร็จ");
       return;
     }
@@ -114,29 +114,54 @@ export default function Home() {
     }
 
     try {
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+          await scannerRef.current.clear();
+        } catch (e) {
+          console.warn("Clear old scanner error:", e);
+        }
+
+        scannerRef.current = null;
+      }
+
       const scanner = new Html5Qrcode("qr-reader");
       scannerRef.current = scanner;
 
       const cameras = await Html5Qrcode.getCameras();
+      console.log("Available cameras:", cameras);
 
       if (!cameras || cameras.length === 0) {
         setMessage("ไม่พบกล้องในเครื่อง");
         return;
       }
 
-      //const cameraId = cameras[0].id;
+      const backCamera =
+        cameras.find((camera) =>
+          camera.label.toLowerCase().includes("back")
+        ) ||
+        cameras.find((camera) =>
+          camera.label.toLowerCase().includes("rear")
+        ) ||
+        cameras.find((camera) =>
+          camera.label.toLowerCase().includes("environment")
+        ) ||
+        cameras[cameras.length - 1];
 
       await scanner.start(
-        cameraId,
+        backCamera.id,
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
         },
         async (decodedText) => {
           const scannedCode = decodedText.trim();
           setLastScan(scannedCode);
 
-          const stall = stalls.find((item) => item.stall_code === scannedCode);
+          const stall = stalls.find(
+            (item) => item.stall_code === scannedCode
+          );
 
           if (stall) {
             setSelectedStall(stall);
@@ -152,9 +177,17 @@ export default function Home() {
       );
 
       setScannerRunning(true);
+      setMessage("เปิดกล้องแล้ว กรุณาสแกน QR");
     } catch (error) {
-      console.error(error);
-      setMessage("เปิดกล้องไม่ได้ กรุณาอนุญาตการใช้กล้องใน Browser");
+      console.error("Camera error:", error);
+
+      const errorMessage =
+        error?.message ||
+        error?.name ||
+        JSON.stringify(error) ||
+        "unknown error";
+
+      setMessage(`เปิดกล้องไม่สำเร็จ: ${errorMessage}`);
     }
   }
 
@@ -166,7 +199,7 @@ export default function Home() {
         scannerRef.current = null;
       }
     } catch (error) {
-      console.error(error);
+      console.error("Stop scanner error:", error);
     }
 
     setScannerRunning(false);
@@ -227,7 +260,7 @@ export default function Home() {
     setLoading(false);
 
     if (error) {
-      console.error(error);
+      console.error("Save regular collection error:", error);
       setMessage("บันทึกรับเงินไม่สำเร็จ");
       return;
     }
@@ -277,7 +310,7 @@ export default function Home() {
     setLoading(false);
 
     if (error) {
-      console.error(error);
+      console.error("Save temporary collection error:", error);
       setMessage("บันทึกแผงอื่น ๆ ไม่สำเร็จ");
       return;
     }
@@ -324,7 +357,7 @@ export default function Home() {
     setLoading(false);
 
     if (error) {
-      console.error(error);
+      console.error("Save expense error:", error);
       setMessage("บันทึกรายจ่ายไม่สำเร็จ");
       return;
     }
@@ -370,10 +403,12 @@ export default function Home() {
     .reduce((sum, item) => sum + Number(item.amount_due), 0);
 
   const totalIncome = cashTotal + transferTotal;
+
   const expenseTotal = expenses.reduce(
     (sum, item) => sum + Number(item.amount),
     0
   );
+
   const netTotal = totalIncome - expenseTotal;
 
   const temporaryCount = collections.filter(
@@ -401,7 +436,7 @@ export default function Home() {
         <div className="mb-4 rounded-2xl bg-white p-5 text-center shadow">
           <h1 className="text-3xl font-bold text-slate-800">เก็บเงินตลาด</h1>
           <p className="mt-2 text-slate-500">
-            บันทึกข้อมูลลง Supabase แล้ว
+            บันทึกข้อมูลลง Supabase
           </p>
         </div>
 
@@ -443,7 +478,7 @@ export default function Home() {
 
           <div
             id="qr-reader"
-            className="overflow-hidden rounded-xl bg-slate-200"
+            className="min-h-[320px] w-full overflow-hidden rounded-xl bg-slate-200"
           ></div>
 
           {lastScan && (
@@ -470,9 +505,11 @@ export default function Home() {
             <h2 className="text-center text-2xl font-bold text-slate-800">
               {selectedStall.stall_code}
             </h2>
+
             <p className="mt-1 text-center text-xl font-bold text-slate-700">
               {selectedStall.stall_name}
             </p>
+
             <p className="mt-1 text-center text-slate-500">
               {selectedStall.category}
             </p>
@@ -778,6 +815,7 @@ export default function Home() {
                     <p className="font-bold text-slate-800">
                       {getRecordTitle(item)}
                     </p>
+
                     <p className="shrink-0 font-bold">
                       {Number(item.amount_paid)} บาท
                     </p>
@@ -817,6 +855,7 @@ export default function Home() {
                     <p className="font-bold text-slate-800">
                       {item.expense_type}
                     </p>
+
                     <p className="shrink-0 font-bold text-red-600">
                       -{Number(item.amount)} บาท
                     </p>
